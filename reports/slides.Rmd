@@ -94,7 +94,11 @@ Missing data (N) by variable :
  - Subjects not in subject level data: `r table_1$missing$not_in_adsl`
  - Subjects not in laboratory data: `r table_1$missing$not_in_adlb`\
  \
- Subjects with missing Planned treatment period (`01TRT01P`) are removed from the data
+ 
+Assumptions:
+
+  - Observations with missing Planned treatment period (`01TRT01P`) are removed from the data
+  - Observations with Analysis Record Flag 01 (`ANL01FL`)== "N" are removed from the data
 
 ## Making table 1
 
@@ -224,7 +228,7 @@ plot <- ggplot(dat_plot) +
     geom_vline(xintercept = 0, color="black")
 ```
 
-Format the plot
+## Format the plot
 ```{r echo=TRUE, eval=FALSE}
 plot+theme_bw()+
     labs(caption = "Figure 1 - Mean plot of HbA1c by time - full analysis set")+
@@ -274,3 +278,4 @@ Construct the flextable object
       )
     )
 ```
+
