@@ -15,4 +15,3 @@ check_data<- function(...){
 
 }
 
-purrr::map(dots$adsl, janitor::describe_class)

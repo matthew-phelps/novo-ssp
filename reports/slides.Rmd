@@ -1,0 +1,276 @@
+---
+title: "S Task"
+author: "Matthew Phelps"
+date: "Feb 15, 2022"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(drake)
+loadd(table_1)
+loadd(adlb)
+loadd(adsl)
+loadd(fig_1)
+```
+
+## Overview of workflow
+
+- Load data
+- Clean/Reshape/manage data
+- Format outputs (Table 1 & Figure 1)
+
+- Code available at: [https://github.com/matthew-phelps/novo-ssp.git](https://github.com/matthew-phelps/novo-ssp.git)
+
+## Load data
+```
+  adsl = read_excel(file_in("input/data.xlsx"), sheet = "ADSL") %>% setDT(),
+  adlb = read_excel(file_in("input/data.xlsx"), sheet = "ADLB")%>% setDT(),
+```
+
+`file_in()` listens for changes in input data file
+
+
+## Data management - Table 1
+
+Filter lab dataset to desired observations
+```{r, echo = TRUE}
+
+  x <- adlb[VISITNUM == 10 & PARAMCD == "C64849B" & FASFL == "Y"]
+```
+
+Check for duplicated subjects
+```{r, echo = TRUE}
+  dub <- x[duplicated(SUBJID)]$SUBJID
+  x[SUBJID == dub][,.(SUBJID, TRTP, AVAL, ANL01FL, ANL01REA)]
+```
+
+
+
+After review, remove flagged observation  
+```{r, echo = TRUE, eval= FALSE}
+  
+  x[ANL01FL == "N"] 
+  x <- x[ANL01FL == "Y"]
+  
+```
+
+No duplicates in ADSL
+```{r, echo = TRUE}
+  adsl[, unique(SUBJID)] %>% length()==nrow(adsl)
+  
+```
+
+## Data management - Table 1
+
+Merge lab and subject level datasets and check for missing observations
+```{r, echo = TRUE, eval=FALSE}
+dat <- merge(x, adsl, all = TRUE, by = "SUBJID")
+  missing <- map(ls$var, function(var) {
+    dat[is.na(get(var))]  %>% nrow()
+  })
+  names(missing) <- ls$var
+  missing$TRT01P <- dat[is.na(TRT01P)] %>% nrow()
+  missing$TRTP <- dat[is.na(TRTP)] %>% nrow()
+  dat <- dat[!is.na(TRT01P)]
+  missing$mismatch <- dat[TRT01P!=TRTP] %>%nrow()
+```
+
+Check for subjects who are in ADSL, but not in ABLB,
+and subjects who are in ABLB, but not in ADSL
+```{r, echo = TRUE, eval=FALSE}
+adsl[FASFL == "Y"][!SUBJID %in% x$SUBJID] %>% nrow()
+x[!SUBJID %in% adsl$SUBJID] %>% nrow()
+```
+
+## Data cleaning review - Table 1
+
+Missing data (N) by variable :  
+
+ - Planned treatment period 01 (`TRT01P`), Age, weight, height: `r table_1$missing$TRT01P`
+ - Diabetes years: `r table_1$missing$DIABDUR`
+ - HbA1c: `r table_1$missing$AVAL`
+ - Planned treatment (`TRTP`): `r table_1$missing$TRTP`
+ - Subjects not in subject level data: `r table_1$missing$not_in_adsl`
+ - Subjects not in laboratory data: `r table_1$missing$not_in_adlb`\
+ \
+ Subjects with missing Planned treatment period (`01TRT01P`) are removed from the data
+
+## Making table 1
+
+Calculate summary statistics by grouping variable (TRT01P)
+```{r, echo=T, eval=FALSE}
+
+  tmp <- dat[!is.na(get(var)), .(
+    n = .N,
+    med = formatC(
+      median(get(var), na.rm = T),
+      digits = dig,
+      format = "f"
+    ),
+    mean = round(mean(get(var), na.rm = T), digits = dig),
+    sd = round(sd(get(var), na.rm = T), digits = dig),
+    min = formatC(
+      round(min(get(var), na.rm = T), digits = dig2),
+      digits = dig2,
+      format = "f"
+    ),
+    max = formatC(
+      round(max(get(var), na.rm = T), digits = dig2),
+      digits = dig2,
+      format = "f"
+    )
+  ), by = TRT01P] %>%
+    .[order(TRT01P )] %>%
+    t()
+```
+
+
+## Making table 1
+
+Reshape and format results so it can latter be fed into {flextable}
+```{r, echo=T, eval=FALSE}
+  out <- data.table(
+    N = c(tmp["n", ], tot["n", ]),
+    "Mean (SD)" = c(paste0(tmp['mean', ]," (", tmp["sd", ], ")"),
+                    paste0(tot['mean', ], " (", tot["sd", ], ")")),
+    Median = c(tmp["med", ], tot["med", ]),
+    "Min ; Max" = c(paste0(tmp['min', ], " ; ", tmp["max", ]),
+                    paste0(tot['min', ], " ; ", tot["max", ]))
+  )
+  m <- out %>% t() %>% as.data.frame() %>% setDT()
+  m[, value := names(out)]
+  setcolorder(m, "value")
+```
+Do this for each variable of interest
+```{r, echo=T, eval=FALSE}
+    pmap(list(ls$var, ls$dig, ls$dig2, ls$label), function(a, b, c, d) {
+      make_summary(
+        dat$dat,
+        var = a,
+        dig = b,
+        dig2 = c,
+        label = d
+      )
+    })
+```
+
+## Table 1
+```{r, echo = FALSE}
+table_1$table
+```
+
+
+
+## Data management - Figure 1
+
+Filter to selected observations
+```{r echo=TRUE, eval=FALSE}
+x <- adlb[PARAMCD == "C64849B" & FASFL == "Y"]
+x <- x[ANL01FL == "Y"]
+```
+
+
+Check that all units are the same and there are no weird/missing values
+```{r echo=TRUE, eval=FALSE}
+  x[, unique(AVALU)]
+  x[, unique(PARAM)]
+  x$VISITNUM  %>% unique()
+  
+  x[is.na(TRTP)]
+  x[is.na(AVAL)]
+```  
+
+Extract week number
+```{r echo=TRUE, eval=FALSE}
+  x[, week_numb := strsplit(x$AVISIT, "\\(Week |\\)") %>% sapply("[", 2)]
+  x[, week_numb := as.integer(week_numb)]
+```  
+
+Mean by treatment group (`TRTP`)
+```{r echo=TRUE, eval=FALSE}
+  x[, mean := mean(AVAL), by = .(AVISIT, TRTP)]
+  dat_plot <- x[, .SD[1], by = .(TRTP, AVISIT)]
+```  
+
+## Making Figure 1
+
+Create Y-axis ticks that start on a even decimal and cover the data range
+```{r echo=TRUE, eval=FALSE}
+  y_min <- floor(plot_range[1]*10)/10
+  y_min <- y_min-(y_min)%%.2
+
+  y_max <- ceiling(plot_range[2]*10)/10
+  y_max <- y_max+(y_max)%%.2
+```
+
+Make the ggplot
+```{r echo=TRUE, eval=FALSE}
+plot <- ggplot(dat_plot) +
+    geom_line(aes(
+      x = week_numb,
+      y = mean,
+      group = TRTP,
+      color = TRTP
+    ), size=1) +
+    geom_point(aes(
+      x = week_numb,
+      y = mean,
+      group = TRTP,
+      color = TRTP
+    ), size=3)+
+    geom_hline(yintercept = 7, color="black")+
+    geom_hline(yintercept = 6.5, color="black")+
+    geom_vline(xintercept = 0, color="black")
+```
+
+Format the plot
+```{r echo=TRUE, eval=FALSE}
+plot+theme_bw()+
+    labs(caption = "Figure 1 - Mean plot of HbA1c by time - full analysis set")+
+    xlab("Week")+
+    theme(panel.grid = element_blank(),
+          plot.caption = element_text(hjust = 0,
+                                      size = 14))+
+    scale_color_manual(name="Treatment group", values = c("#E69F00", "#56B4E9"))+
+    scale_y_continuous(name="HbA1c (%)",limits = c(y_min, y_max), breaks = seq(y_min, y_max, by=0.2))
+```
+
+## Figure 1
+```{r echo=FALSE}
+fig_1
+```
+
+## Supp - flextable
+
+Construct the flextable object
+```{r echo=TRUE, eval=FALSE}
+  flex <- map(out, rbindlist, fill = T) %>% rbindlist()
+  flex <- rbindlist(list(tmp, flex), fill = T)
+  setcolorder(flex, c("label", "value"))
+  names(flex)
+  n_col <- ncol(flex)
+  table_out <- flextable(flex)  %>%
+    merge_h_range(i = 1,
+                  j1 = 1,
+                  j2 = 2) %>%
+    merge_h_range(i = seq(2, 22, by = 5),
+                  j1 = 1,
+                  j2 = n_col) %>%
+    width(j = 1, width = 0.1) %>%
+    width(j = 2:2, width = 1.6) %>%
+    width(j = 3:n_col, width = 1.4) %>%
+    set_header_labels(
+      label = "",
+      value = "",
+      V1 = "Treat A",
+      V2 = "Treat B",
+      V3 = "Total"
+    ) %>%
+    add_footer_lines(
+      values = c(
+        "N: Number of subjects, SD: Standard Deviation, Min: Minimum,
+        Max: Maximum, yrs: Years, m: Meter, kg: Kilogram"
+      )
+    )
+```
