@@ -2,28 +2,45 @@
 title: "S Task"
 author: "Matthew Phelps"
 date: "Feb 15, 2022"
-output: slidy_presentation
+output:
+  slidy_presentation:
+    highlight: tango
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 library(drake)
 loadd(table_1)
 loadd(adlb)
 loadd(adsl)
 loadd(fig_1)
+
 ```
 
 ## Overview of workflow
+```{css, echo=FALSE}
 
+ul li{
+  margin-bottom: 10px;
+}
+
+```
 - Load data
 - Clean/Reshape/manage data
-- Format outputs (Table 1 & Figure 1)
-
+- Format outputs (Table 1 & Figure 1)  
+  
+  
 - Code available at: [https://github.com/matthew-phelps/novo-ssp.git](https://github.com/matthew-phelps/novo-ssp.git)
+- {drake} package for workflow management
+
+## Overview of workflow
+
+![drake plan](drake_plan_static.JPG)
+
 
 ## Load data
-```
+```{r, echo = TRUE, eval=FALSE}
   adsl = read_excel(file_in("input/data.xlsx"), sheet = "ADSL") %>% setDT(),
   adlb = read_excel(file_in("input/data.xlsx"), sheet = "ADLB")%>% setDT(),
 ```
@@ -66,14 +83,15 @@ No duplicates in ADSL
 Merge lab and subject level datasets and check for missing observations
 ```{r, echo = TRUE, eval=FALSE}
 dat <- merge(x, adsl, all = TRUE, by = "SUBJID")
-  missing <- map(ls$var, function(var) {
-    dat[is.na(get(var))]  %>% nrow()
-  })
-  names(missing) <- ls$var
-  missing$TRT01P <- dat[is.na(TRT01P)] %>% nrow()
-  missing$TRTP <- dat[is.na(TRTP)] %>% nrow()
-  dat <- dat[!is.na(TRT01P)]
-  missing$mismatch <- dat[TRT01P!=TRTP] %>%nrow()
+
+missing <- map(ls$var, function(var) {
+  dat[is.na(get(var))]  %>% nrow()
+})
+names(missing) <- ls$var
+missing$TRT01P <- dat[is.na(TRT01P)] %>% nrow()
+missing$TRTP <- dat[is.na(TRTP)] %>% nrow()
+dat <- dat[!is.na(TRT01P)]
+missing$mismatch <- dat[TRT01P!=TRTP] %>%nrow()
 ```
 
 Check for subjects who are in ADSL, but not in ABLB,
@@ -85,7 +103,7 @@ x[!SUBJID %in% adsl$SUBJID] %>% nrow()
 
 ## Data cleaning review - Table 1
 
-Missing data (N) by variable :  
+Missing observations (N) by variable :  
 
  - Planned treatment period 01 (`TRT01P`), Age, weight, height: `r table_1$missing$TRT01P`
  - Diabetes years: `r table_1$missing$DIABDUR`
