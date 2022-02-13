@@ -9,5 +9,9 @@ make_fig_1 <- function(adlb) {
   y_max <- ceiling(plot_range[2] * 10) / 10
   y_max <- y_max + (y_max) %% .2
 
-  plot_fig1(dat_plot, y_min, y_max)
+  plot_pretty <- plot_fig1(dat_plot, y_min, y_max)
+
+  plot_exact <- plot_fig1_exact(dat_plot = dat_plot, y_min, y_max)
+  list(plot_pretty=plot_pretty,
+       plot_exact=plot_exact)
 }

@@ -1,39 +1,40 @@
 dm_table1 <- function(adsl, adlb, ls) {
 
   # Filter to desired observations
-  x <- adlb[VISITNUM == 10 & PARAMCD == "C64849B" & FASFL == "Y"]
+  adlb <- adlb[VISITNUM == 10 & PARAMCD == "C64849B" & FASFL == "Y"]
 
-  # One dub subject in adlb visit 10
-  x[, unique(SUBJID)] %>% length()
-  dub <- x[duplicated(SUBJID)]$SUBJID
-  x[SUBJID == dub]
+  # One dublicate subject in ADLB visit 10
+  adlb[, unique(SUBJID)] %>% length()
+  dub <- adlb[duplicated(SUBJID)]$SUBJID
+  adlb[SUBJID == dub]
 
   # Remove observation flagged
-  x[ANL01FL == "N"]  %>% nrow()
-  x <- x[ANL01FL == "Y"]
-  dat <- merge(x, adsl, all = TRUE, by = "SUBJID")
+  adlb[ANL01FL == "N"]  %>% nrow()
+  adlb <- adlb[ANL01FL == "Y"]
 
-
-  # No dups in adsl file
+  # No duplicates in ADSL file
   adsl[, unique(SUBJID)] %>% length()==length(adsl)
 
+  dat <- merge(adlb, adsl, all = TRUE, by = "SUBJID", suffixes = c("_adlb", "_adsl"))
 
 
-  # Record the number of observations are missing values for each variable
-  missing <- map(ls$var, function(var) {
-    dat[is.na(get(var))]  %>% nrow()
-  })
-  names(missing) <- ls$var
-  missing$TRT01P <- dat[is.na(TRT01P)] %>% nrow()
-  missing$TRTP <- dat[is.na(TRTP)] %>% nrow()
-  dat <- dat[!is.na(TRT01P)]
-  missing$mismatch <- dat[TRT01P!=TRTP] %>%nrow()
-
+  missing <- list()
   # Check for subjects who are in ADSL, but not in ABLB
-  missing$not_in_adlb <- adsl[FASFL == "Y"][!SUBJID %in% x$SUBJID] %>% nrow()
+  missing$not_in_adlb <- adsl[FASFL == "Y"][!SUBJID %in% adlb$SUBJID] %>% nrow()
 
   # Check for subjects who are in ABLB, but not in ADSL
-  missing$not_in_adsl <- x[!SUBJID %in% adsl$SUBJID] %>% nrow()
+  missing$not_in_adsl <- adlb[!SUBJID %in% adsl$SUBJID] %>% nrow()
+
+  # Check that FASFL values match in the datasets. The only instances of discrepancy
+  # are when there are missing values in one of the datasets.
+  subject_vec <- dat[FASFL_adlb==FASFL_adsl]$SUBJID
+  dat[!SUBJID %in% subject_vec]
+
+  # Those with missing treatment TRT01P variable (the subjectid is not in the
+  # baseline), are assigned a treatment value based on the ADLB dataset (i.e
+  # TRTP variable)
+  dat[is.na(TRT01P), TRT01P:=TRTP]
+
 
   list(dat = dat, missing = missing)
 }

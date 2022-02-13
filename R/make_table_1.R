@@ -1,5 +1,7 @@
-make_table_1 <- function(adsl, adlb) {
+make_table_1 <- function(data_review) {
   # The variables to be summarized
+  adsl <- data_review$adsl
+  adlb <- data_review$adlb
   ls <- list(
     var = c("AGE", "HGTBL", "WGTBL", "DIABDUR", "AVAL"),
     label = c(
@@ -14,7 +16,6 @@ make_table_1 <- function(adsl, adlb) {
   )
 
   dat <- dm_table1(adsl, adlb, ls = ls)
-  dat$missing
 
   out <-
     pmap(list(ls$var, ls$dig, ls$dig2, ls$label), function(a, b, c, d) {
@@ -33,16 +34,21 @@ make_table_1 <- function(adsl, adlb) {
     data.frame() %>%
     setDT()
 
-  names(tmp) <-  c("V1", "V2")
+  names(tmp) <-  c("a_n", "b_n")
   tmp <- cbind(data.table(label = "Number of Subjects"), tmp)
-  tmp[, V3 := dat$dat[, .N]]
+  tmp[, tot_n := dat$dat[, .N]]
 
 
   flex <- map(out, rbindlist, fill = T) %>% rbindlist()
   flex <- rbindlist(list(tmp, flex), fill = T)
+  flex[,sort(names(flex))]
+  setcolorder(flex, sort(names(flex)))
   setcolorder(flex, c("label", "value"))
-
+flex
   table_out <- make_flextable(flex)
 
+  read_docx() %>%
+    body_add_flextable(value = table_out) %>%
+    print(target = "output/Table 1.docx")
   return(list(table = table_out, missing = dat$missing))
 }
