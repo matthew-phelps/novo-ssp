@@ -25,10 +25,11 @@ dm_table1 <- function(adsl, adlb, ls) {
   # Check for subjects who are in ABLB, but not in ADSL
   missing$not_in_adsl <- adlb[!SUBJID %in% adsl$SUBJID] %>% nrow()
 
-  # Check that FASFL values match in the datasets. The only instances of discrepancy
-  # are when there are missing values in one of the datasets.
-  subject_vec <- dat[FASFL_adlb==FASFL_adsl]$SUBJID
-  dat[!SUBJID %in% subject_vec]
+  # Check that FASFL and Treatment group values match in the datasets. The only
+  # instances of discrepancy are when there are missing values in one of the
+  # datasets.
+  no_anomaly <- c(dat[FASFL_adlb==FASFL_adsl]$SUBJID, dat[TRTP==TRT01P]$SUBJID)
+  dat[!SUBJID %in% c(no_anomaly)]
 
   # Those with missing treatment TRT01P variable (the subjectid is not in the
   # baseline), are assigned a treatment value based on the ADLB dataset (i.e

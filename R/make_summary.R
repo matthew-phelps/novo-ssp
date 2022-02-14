@@ -1,5 +1,4 @@
 make_summary  <- function(dat, var, dig, dig2, label) {
-
   # Stats by grouping variable
   tab_summary <- dat[!is.na(get(var)), .(
     n = .N,

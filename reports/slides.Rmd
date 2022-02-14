@@ -40,8 +40,27 @@ Extra
 
 ## Overview of workflow
 
-![drake plan](drake_plan_static_2.JPG)
+```{#numCode .R .numberLines}
 
+plan <- drake_plan(
+  adsl = read_excel(file_in("input/data.xlsx"), sheet = "ADSL") %>% setDT(),
+  adlb = read_excel(file_in("input/data.xlsx"), sheet = "ADLB") %>% setDT(),
+  data_review = review_data(adsl, adlb),
+  table_1 = make_table_1(data_review),
+  fig_1 = make_fig_1(adlb = data_review$adlb),
+  report = rmarkdown::render(
+    knitr_in("reports/slides.rmd"),
+    output_file = file_out("reports/slides.html"),
+    output_dir = "reports"
+  )
+)
+
+```
+
+
+## Overview of workflow
+
+![drake plan](drake_plan_static_2.JPG)
 
 ## Load data
 ```{r, echo = TRUE, eval=FALSE}
@@ -56,7 +75,7 @@ adlb = read_excel(file_in("input/data.xlsx"), sheet = "ADLB") %>% setDT(),
 Check both datasets for missing values and unit convertions
 
 ADSL:
-```{r, echo = TRUE, eval=FALSE}
+```{#numCode .R .numberLines}
 adsl <- add_any_miss(adsl, missing = T, complete = F) %>% setDT()
 missing <- adsl[any_miss_all == T]
 adsl[, map(.SD, hist), .SDcols = range_vars]
@@ -68,7 +87,7 @@ out_unique <-
 ```
 
 ADLB:
-```{r, echo = TRUE, eval=FALSE}
+```{#numCode .R .numberLines}
 adlb$ANL01REA <- NULL
   adlb <- add_any_miss(adlb, missing = T, complete = F) %>% setDT()
   missing <- adlb[any_miss_all == T]
@@ -101,6 +120,30 @@ knitr::kable(data_review$first_check_adsl$unique)%>%
 ```
 
 
+
+---
+```{css, echo=FALSE}
+
+div.vbox {
+  float: left;
+  height: 40%; width: 50%;
+  margin-top: -220px;
+}
+div.hbox {
+  width:60%;  margin-top: 0;
+  margin-left:auto; margin-right:auto;
+  height: 60%;
+  overflow:auto;
+  text-align:center;
+  clear:both;
+  font-size: 6rem
+}
+```
+<div class="vbox"></div>
+<div class="hbox">
+Table 1
+</div>
+
 ## Data management: Table 1
 
 1. Filter lab dataset to desired observations
@@ -116,23 +159,7 @@ dub <- adlb[duplicated(SUBJID)]$SUBJID
 adlb[SUBJID == dub][,.(SUBJID, TRTP, AVAL, ANL01FL, ANL01REA)]
 ```
 
-3. After review, remove flagged observation  
-```{r, echo = TRUE, eval= FALSE}
-adlb[ANL01FL == "N"]
-adlb <- adlb[ANL01FL == "Y"]
-
-```
-
-
-## Data management: Table 1
-
-4. Merge lab and subject level datasets and check for missing observations
-```{r, echo = TRUE, eval=FALSE}
-dat <- merge(adlb, adsl, all = TRUE, by = "SUBJID", suffixes = c("_adlb", "_adsl"))
-
-```
-
-5. Check for subjects who are in ADSL, but not in ADLB,
+3. Check for subjects who are in ADSL, but not in ADLB,
 and subjects who are in ADLB, but not in ADSL
 ```{r, echo = TRUE, eval=FALSE}
 not_in_adlb <- adsl[FASFL == "Y"][!SUBJID %in% adlb$SUBJID] %>% nrow()
@@ -140,10 +167,21 @@ not_in_adsl <- adlb[!SUBJID %in% adsl$SUBJID] %>% nrow()
 ```
 
 
-6. Check for discrepancies in the FASFL values between datasets
+## Data management: Table 1
+
+
+
+4. Merge lab and subject level datasets and check for missing observations
 ```{r, echo = TRUE, eval=FALSE}
-subject_vec <- dat[FASFL_adlb==FASFL_adsl]$SUBJID
-  dat[!SUBJID %in% subject_vec]
+dat <- merge(adlb, adsl, all = TRUE, by = "SUBJID", suffixes = c("_adlb", "_adsl"))
+
+```
+
+5. Check for discrepancies in the FASFL values and treatment group
+between datasets
+```{r, echo = TRUE, eval=FALSE}
+  no_anomaly <- c(dat[FASFL_adlb==FASFL_adsl]$SUBJID, dat[TRTP==TRT01P]$SUBJID)
+  dat[!SUBJID %in% c(no_anomaly)]
 ```
 
 
@@ -153,7 +191,7 @@ subject_vec <- dat[FASFL_adlb==FASFL_adsl]$SUBJID
 
  - Subjects not in ADSL data: `r table_1$missing$not_in_adsl`
  - Subjects not in ADLB data: `r table_1$missing$not_in_adlb`
- - No discrepancies in FASFL values
+ - No discrepancies in FASFL values or treatment groups.
  
  <br>  
  
@@ -168,7 +206,9 @@ subject_vec <- dat[FASFL_adlb==FASFL_adsl]$SUBJID
 ## Making table 1
 
 1. Calculate summary statistics by grouping variable (TRT01P)
-```{r, echo=T, eval=FALSE}
+```{#numCode .R .numberLines}
+# var = variable to be summarized
+# dig and diag2 = number of significant digits
 
 tab_summary <- dat[!is.na(get(var)), .(
   n = .N,
@@ -194,7 +234,7 @@ tab_summary <- dat[!is.na(get(var)), .(
 
 
 2. Reshape and format results so it can latter be fed into {flextable}
-```{r, echo=T, eval=FALSE}
+```{#numCode .R .numberLines}
   out <- data.table(
     N = c(tab_summary["n", ], tot["n", ]),
     "Mean (SD)" = c(paste0(tab_summary['mean', ]," (", tab_summary["sd", ], ")"),
@@ -225,6 +265,11 @@ tab_summary <- dat[!is.na(get(var)), .(
 table_1$table
 ```
 
+##  
+<div class="vbox"></div>
+<div class="hbox">
+Figure 1
+</div>
 
 
 ## Data management - Figure 1
@@ -260,7 +305,7 @@ x <- x[ANL01FL == "Y"]
 ```
 
 2. Make the ggplot
-```{r echo=TRUE, eval=FALSE}
+```{#numCode .R .numberLines}
 plot <- ggplot(dat_plot) +
     geom_line(aes(
       x = week_numb,
@@ -282,7 +327,7 @@ plot <- ggplot(dat_plot) +
 ## Making Figure 1
 
 3. Formatting plot
-```{r echo=TRUE, eval=FALSE}
+```{#numCode .R .numberLines}
 plot+theme_bw()+
     labs(caption = "Figure 1 - Mean plot of HbA1c by time - full analysis set")+
     xlab("Week")+
@@ -295,19 +340,20 @@ plot+theme_bw()+
 
 ## Figure 1
 ```{r echo=FALSE}
-fig_1$plot_pretty
+fig_1$plot_exact
+
 ```
 
-## Supp - Figure 1 exact
+## Supp - Figure 1
 
 ```{r echo=FALSE}
-fig_1$plot_exact
+fig_1$plot_pretty
 ```
 
 ## Supp - flextable
 
 Construct the flextable object
-```{r echo=TRUE, eval=FALSE}
+```{#numCode .R .numberLines}
 make_flextable <- function(flex) {
   n_col <- ncol(flex)
   n_row <- nrow(flex)
@@ -357,5 +403,163 @@ make_flextable <- function(flex) {
     )
 }
 ```
+
+## Supp - functions
+
+```{#numCode .R .numberLines}
+review_data <- function(adsl, adlb) {
+  range_vars <- c("AGE", "HGTBL", "WGTBL", "DIABDUR")
+  unique_vars <- c("AGEU", "HGTBLU", "WGTBLU", "DIABDURU", "TRT01P")
+
+  # Save this to show on slides
+  first_check_adsl <- check_data_adsl(adsl, range_vars, unique_vars)
+  adsl[which.max(HGTBL)]
+  adsl[which.min(HGTBL)]
+  adsl[which.max(HGTBL), HGTBL := HGTBL / 100]
+  adsl[WGTBLU == "lb", WGTBL := WGTBL * 0.453592]
+  adsl[WGTBLU == "lb", WGTBLU := "kg"]
+  check_data_adsl(adsl, range_vars, unique_vars)
+
+
+  range_vars <- c("VISITNUM", "AVAL")
+  unique_vars <- c("AVALU")
+  first_check_adlb <- check_data_adlb(adlb, range_vars, unique_vars)
+  list(adsl = adsl,
+       adlb = adlb,
+       first_check_adsl=first_check_adsl,
+       first_check_adlb=first_check_adlb)
+}
+
 ```
 
+```{#numCode .R .numberLines}
+make_table_1 <- function(data_review) {
+  # The variables to be summarized
+  adsl <- data_review$adsl
+  adlb <- data_review$adlb
+  ls <- list(
+    var = c("AGE", "HGTBL", "WGTBL", "DIABDUR", "AVAL"),
+    label = c(
+      "Age (yrs)",
+      "Height (m)",
+      "Body Weight (kg)",
+      "Duration of Diabetes (yrs)",
+      "HbA1c (%)"
+    ),
+    dig = c(1, 2, rep(1, 3)),
+    dig2 = c(0, 2, rep(1, 3))
+  )
+
+  dat <- dm_table1(adsl, adlb, ls = ls)
+
+  out <-
+    pmap(list(ls$var, ls$dig, ls$dig2, ls$label), function(a, b, c, d) {
+      make_summary(
+        dat$dat,
+        var = a,
+        dig = b,
+        dig2 = c,
+        label = d
+      )
+    })
+  tmp <- dat$dat[, .N, by = TRT01P] %>%
+    .[order(TRT01P)] %>%
+    .[, .(N)] %>%
+    t() %>%
+    data.frame() %>%
+    setDT()
+
+  names(tmp) <-  c("a_n", "b_n")
+  tmp <- cbind(data.table(label = "Number of Subjects"), tmp)
+  tmp[, tot_n := dat$dat[, .N]]
+
+
+  flex <- map(out, rbindlist, fill = T) %>% rbindlist()
+  flex <- rbindlist(list(tmp, flex), fill = T)
+  flex[,sort(names(flex))]
+  setcolorder(flex, sort(names(flex)))
+  setcolorder(flex, c("label", "value"))
+flex
+  table_out <- make_flextable(flex)
+
+  read_docx() %>%
+    body_add_flextable(value = table_out) %>%
+    print(target = "output/Table 1.docx")
+  return(list(table = table_out, missing = dat$missing))
+}
+
+```
+
+```{#numCode .R .numberLines}
+make_summary  <- function(dat, var, dig, dig2, label) {
+
+  # Stats by grouping variable
+  tab_summary <- dat[!is.na(get(var)), .(
+    n = .N,
+    med = formatC(
+      median(get(var), na.rm = T),
+      digits = dig,
+      format = "f"
+    ),
+    mean = round(mean(get(var), na.rm = T), digits = dig),
+    sd = round(sd(get(var), na.rm = T), digits = dig),
+    min = formatC(
+      round(min(get(var), na.rm = T), digits = dig2),
+      digits = dig2,
+      format = "f"
+    ),
+    max = formatC(
+      round(max(get(var), na.rm = T), digits = dig2),
+      digits = dig2,
+      format = "f"
+    )
+  ), by = TRT01P] %>%
+    .[order(TRT01P )] %>%
+    t()
+
+  # Stats by total (i.e. no groping variable)
+  tot <- dat[!is.na(get(var)), .(
+    n = .N,
+    med = formatC(
+      median(get(var), na.rm = T),
+      digits = dig,
+      format = "f"
+    ),
+    mean = round(mean(get(var), na.rm = T), digits = dig),
+    sd = round(sd(get(var), na.rm = T), digits = dig),
+    min = formatC(
+      round(min(get(var), na.rm = T), digits = dig2),
+      digits = dig2,
+      format = "f"
+    ),
+    max = formatC(
+      round(max(get(var), na.rm = T), digits = dig2),
+      digits = dig2,
+      format = "f"
+    )
+  )]  %>%t()
+
+  # Reshape and format results so it can latter be fed into flextable
+  out <- data.table(
+    # N = c(tab_summary["n", ], tot["n", ]),
+    "Mean (SD)" = c(paste0(tab_summary['mean', ], " (", tab_summary["sd", ], ")"), paste0(tot['mean', ], " (", tot["sd", ], ")")),
+    Median = c(tab_summary["med", ], tot["med", ]),
+    "Min ; Max" = c(paste0(tab_summary['min', ], " ; ", tab_summary["max", ]), paste0(tot['min', ], " ; ", tot["max", ]))
+  )
+  m <- out %>% t() %>% as.data.frame() %>% setDT()
+  m[, value := names(out)]
+  setcolorder(m, "value")
+  names(m) <- c("value", "a_z", "b_z", "tot_z")
+  n_out <- data.table(
+    N = c(tab_summary["n", ], tot["n", ]))
+
+  tmp_N <- n_out %>% t() %>% as.data.frame() %>% setDT()
+  tmp_N[, value := names(n_out)]
+  setcolorder(tmp_N, "value")
+  names(tmp_N) <- c("value", "a_n", "b_n", "tot_n")
+  # Add a row containing only the variable. This row will be horizontally
+  # merged during the flextable step.
+  list(data.table(label = label), tmp_N, m)
+}
+
+```
